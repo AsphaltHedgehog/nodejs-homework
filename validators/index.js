@@ -1,3 +1,4 @@
 module.exports = {
-  registerUser: require('./auth')
+  registerUser: require('./auth'),
+  verificationEmail: require('./email')
 }
