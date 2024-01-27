@@ -3,4 +3,5 @@ module.exports = {
   validateUser: require("./validateUser.js"),
   authenticate: require("./authenticate.js"),
   upload: require("./fileUploader.js"),
+  validateEmail: require("./validateEmail.js"),
 };

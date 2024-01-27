@@ -2,7 +2,7 @@ const express = require("express");
 
 const { auth } = require("../../controllers");
 const { User } = require("../../models/user");
-const { validateUser, authenticate } = require("../../middlewares");
+const { validateUser, authenticate, validateEmail } = require("../../middlewares");
 
 const router = express.Router();
 
@@ -15,6 +15,15 @@ router.post("/login",
   validateUser(User),
   auth.login
 );
+
+router.get('/verify/:verificationToken',
+  auth.verify
+)
+
+router.post('/resend',
+  validateEmail(),
+  auth.resend
+)
 
 router.use(authenticate)
 

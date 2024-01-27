@@ -4,31 +4,88 @@ const ctrlWrapper = require("../helpers/ctrlWrapper.js");
 const jsonwebtoken = require('jsonwebtoken');
 const bcrypt = require("bcrypt");
 const gravatar = require('gravatar');
+const crypto = require('crypto');
 
 const { envsConfig } = require("../configs");
+
+const confirmEmail = require("../services/emailService.js");
 
 const register = async (req, res) => {
   const { email } = req.body;
 
   const avatarUrl = gravatar.url(email)
   const hashedPassword = await bcrypt.hash(req.body.password, 5)
+  
+  const verificationToken = crypto.randomUUID();
 
-  const createdUser = await User.create({ ...req.body, password: hashedPassword, token: null, avatarUrl: avatarUrl});
+  const createdUser = await User.create({ ...req.body, password: hashedPassword, token: null, avatarUrl: avatarUrl, verificationToken: verificationToken });
+  
+  const verifyEmail = {
+    to: email,
+    subject: 'Verification email',
+    html: `<a href='${envsConfig.baseUrl}/api/auth/verify/:${verificationToken}' target='_blank'>Pleas confirm email via url</a>`
+  };
+
+  await confirmEmail(verifyEmail);
 
   res.status(201).json({
     user: { email: createdUser.email, subscription: createdUser.subscription }
-  })
+  });
+};
+
+const verify = async (req, res) => { 
+  const { verificationToken } = req.params;
+  console.log(verificationToken);
+  const user = await User.findOne({ verificationToken })
+
+  if (!user) {
+    res.status(404).json({message: 'User not found'})
+  }
+
+  await User.findByIdAndUpdate(user.id, { verificationToken: '', isVerified: true })
+
+  res.json({message: 'Verification successful'})
+};
+
+const resend = async (req, res) => { 
+  const { email } = req.body;
+  const user = await User.findOne({ email })
+
+  if (!user) {
+    res.status(404).json({message: 'User not found'})
+  }
+
+  if (user.isVerified) {
+    res.status(400).json({message: 'User already verified'})
+  }
+
+  const verifyEmail = {
+    to: email,
+    subject: 'Verification email',
+    html: `<a href='${envsConfig.baseUrl}/api/auth/verify/${user.verificationToken}' target='_blank'>Pleas confirm email via url</a>`
+  };
+
+  await confirmEmail(verifyEmail);
+
+  res.status(200).json({ message: 'Verification email send' })
 };
 
 const login = async (req, res) => {
   const { email, password } = req.body
   const ifExists = await User.findOne({ email })
+  
   if (!ifExists) {
     res.status(401).json({ message: 'Email or password wrong' })
   }
+
   const isSamePassword = await bcrypt.compare(password, ifExists.password);
+
   if (!isSamePassword) {
     res.status(401).json({ message: 'Email or password wrong' })
+  }
+
+  if (!ifExists.isVerified) {
+    res.status(401).json({ message: 'first verify via email' })
   }
   
   const token = await jsonwebtoken.sign({ id: ifExists.id }, envsConfig.secret);
@@ -70,6 +127,8 @@ const subscription = async (req, res) => {
 
 module.exports = {
   register: ctrlWrapper(register),
+  verify: ctrlWrapper(verify),
+  resend: ctrlWrapper(resend),
   login: ctrlWrapper(login),
   logout: ctrlWrapper(logout),
   current: ctrlWrapper(current),
